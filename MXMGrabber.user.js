@@ -4,7 +4,7 @@
 // @match        https://www.musixmatch.com/lyrics/*
 // @version      7-30-2025
 // @author       Lioncat6
-// @description  Tool to grab lyrics from MusixMatch lyrics pages to either download or upload them to LRCLIB
+// @description  Tool to grab Synced lyrics from MusixMatch lyrics pages to either download or upload them to LRCLIB
 // @resource     toastifyJs https://cdn.jsdelivr.net/npm/toastify-js
 // @resource     toastifyCss https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=musixmatch.com
