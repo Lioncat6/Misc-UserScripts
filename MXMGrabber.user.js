@@ -12,6 +12,7 @@
 // @supportURL   https://github.com/Lioncat6/Misc-UserScripts/issues
 // @updateURL    https://raw.githubusercontent.com/Lioncat6/Misc-UserScripts/main/MXMGrabber.user.js
 // @downloadURL  https://github.com/Lioncat6/Misc-UserScripts/raw/refs/heads/main/MXMGrabber.user.js
+// @license MIT 
 // ==/UserScript==
 
 (function () {
