@@ -5,14 +5,14 @@
 // @version      7-30-2025
 // @author       Lioncat6
 // @description  Tool to grab lyrics from MusixMatch lyrics pages to either download or upload them to LRCLIB
-// @require      https://cdn.jsdelivr.net/npm/toastify-js
+// @resource     toastifyJs https://cdn.jsdelivr.net/npm/toastify-js
 // @resource     toastifyCss https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=musixmatch.com
 // @homepageURL  https://github.com/Lioncat6/Misc-UserScripts
 // @supportURL   https://github.com/Lioncat6/Misc-UserScripts/issues
 // @updateURL    https://raw.githubusercontent.com/Lioncat6/Misc-UserScripts/main/MXMGrabber.user.js
 // @downloadURL  https://github.com/Lioncat6/Misc-UserScripts/raw/refs/heads/main/MXMGrabber.user.js
-// @license MIT 
+// @license MIT
 // ==/UserScript==
 
 (function () {
@@ -22,6 +22,11 @@
 	link.rel = "stylesheet";
 	link.href = "https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css";
 	document.head.appendChild(link);
+
+    const mxmScript = document.createElement("script");
+    mxmScript.src = "https://cdn.jsdelivr.net/npm/toastify-js";
+    mxmScript.type = "text/javascript";
+    document.head.appendChild(mxmScript);
 
 	let lyricsDict = [];
 	let metaDict = [];
