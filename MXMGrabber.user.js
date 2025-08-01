@@ -2,7 +2,7 @@
 // @name         MusixMatch Lyrics Grabber
 // @namespace    MXMGrabber
 // @match        https://www.musixmatch.com/*
-// @version      7-30-2025
+// @version      8-1-2025
 // @author       Lioncat6
 // @description  Tool to grab Synced lyrics from MusixMatch lyrics pages to either download or upload them to LRCLIB
 // @resource     toastifyJs https://cdn.jsdelivr.net/npm/toastify-js
