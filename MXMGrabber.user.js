@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MusixMatch Lyrics Grabber
 // @namespace    MXMGrabber
-// @match        https://www.musixmatch.com/lyrics/*
+// @match        https://www.musixmatch.com/*
 // @version      7-30-2025
 // @author       Lioncat6
 // @description  Tool to grab Synced lyrics from MusixMatch lyrics pages to either download or upload them to LRCLIB
