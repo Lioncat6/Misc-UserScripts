@@ -2,7 +2,7 @@
 // @name         MusixMatch Lyrics Grabber
 // @namespace    MXMGrabber
 // @match        https://www.musixmatch.com/*
-// @version      8-1-2025
+// @version      7-30-2025
 // @author       Lioncat6
 // @description  Tool to grab Synced lyrics from MusixMatch lyrics pages to either download or upload them to LRCLIB
 // @resource     toastifyJs https://cdn.jsdelivr.net/npm/toastify-js
@@ -13,31 +13,72 @@
 // @updateURL    https://raw.githubusercontent.com/Lioncat6/Misc-UserScripts/main/MXMGrabber.user.js
 // @downloadURL  https://github.com/Lioncat6/Misc-UserScripts/raw/refs/heads/main/MXMGrabber.user.js
 // @license MIT
+// @grant        GM_registerMenuCommand
+// @grant 	     GM_unregisterMenuCommand
+// @grant        GM_setValue
+// @grant        GM_getValue
 // ==/UserScript==
 
 (function () {
 	"use strict";
+
+	function updateMenu() {
+		try {
+			GM_unregisterMenuCommand("enableMultiThreading");
+			GM_unregisterMenuCommand("LRCLIB Upload MultiThreading [ON]");
+			GM_unregisterMenuCommand("LRCLIB Upload MultiThreading [OFF]");
+			GM_registerMenuCommand(
+				"LRCLIB Upload MultiThreading [" + (GM_getValue("enableMultiThreading", false) ? "ON" : "OFF") + "]",
+				function () {
+					let current = GM_getValue("enableMultiThreading", false);
+					GM_setValue("enableMultiThreading", !current);
+					updateMenu();
+				},
+				"enableMultiThreading"
+			);
+		} catch (error) {
+			console.error("Error updating menu commands:", error);
+		}
+	}
+	updateMenu();
+
+	function safeGetSetting(key, defaultValue) {
+		try {
+			let value = GM_getValue(key, defaultValue);
+			if (typeof value === "undefined") {
+				console.warn(`Setting "${key}" is undefined, using default value: ${defaultValue}`);
+				return defaultValue;
+			}
+			return value;
+		} catch (error) {
+			console.error(`Error retrieving setting "${key}":`, error);
+			return defaultValue;
+		}
+	}
+
+	let enableMultiThreading = safeGetSetting("enableMultiThreading", false);
 
 	const link = document.createElement("link");
 	link.rel = "stylesheet";
 	link.href = "https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css";
 	document.head.appendChild(link);
 
-    const mxmScript = document.createElement("script");
-    mxmScript.src = "https://cdn.jsdelivr.net/npm/toastify-js";
-    mxmScript.type = "text/javascript";
-    document.head.appendChild(mxmScript);
+	const mxmScript = document.createElement("script");
+	mxmScript.src = "https://cdn.jsdelivr.net/npm/toastify-js";
+	mxmScript.type = "text/javascript";
+	document.head.appendChild(mxmScript);
 
 	let lyricsDict = [];
 	let metaDict = [];
 
 	let good = "linear-gradient(to right, #00b09b, #96c93d)";
 	let bad = "linear-gradient(to right, #ff416c, #ff4b2b)";
+	let waiting = "linear-gradient(to right, #f7971e, #ffd200)";
 
 	function notification(message, isBad = false) {
 		Toastify({
 			text: message,
-			duration: 3000,
+			duration: 8000,
 			close: true,
 			gravity: "top", // `top` or `bottom`
 			position: "right", // `left`, `center` or `right`
@@ -47,6 +88,51 @@
 				"font-family": "Arial",
 			},
 		}).showToast();
+	}
+
+	function displayPersistentToast(message) {
+		return Toastify({
+			text: message,
+			duration: -1,
+			close: true,
+			gravity: "top", // `top` or `bottom`
+			position: "right", // `left`, `center` or `right`
+			stopOnFocus: false, // Prevents dismissing of toast on hover
+			style: {
+				background: waiting,
+				"font-family": "Arial",
+			},
+		}).showToast();
+	}
+
+	function uploadStatus(success = true) {
+		Toastify({
+			text: success ? "Lyrics submitted successfully." : "Failed to submit lyrics.",
+			duration: 3000,
+			style: { background: success ? good : bad },
+		}).showToast();
+		let submitButton = document.getElementById("lrclib-submit-button");
+		if (submitButton) {
+			let submissionStatus = document.getElementById("lrclib-submission-status");
+			if (submissionStatus) {
+				submissionStatus.textContent = success ? "✅" : "❌";
+			} else {
+				submissionStatus = document.createElement("span");
+				submissionStatus.id = "lrclib-submission-status";
+				submissionStatus.textContent = success ? "✅" : "❌";
+				submitButton.parentNode.insertBefore(submissionStatus, submitButton.nextSibling);
+			}
+			submitButton.background = success ? good : bad;
+			submitButton.title = success ? "Successfully submitted lyrics to LRCLIB." : "Failed to submit lyrics to LRCLIB. Check console for error.";
+		}
+	}
+
+	function uploadFailed() {
+		uploadStatus(false);
+	}
+
+	function uploadSuccess() {
+		uploadStatus(true);
 	}
 
 	function showToast() {
@@ -182,6 +268,16 @@
 			});
 	}
 
+	function clearNotification(notificationElement) {
+		if (notificationElement) {
+			try {
+				notificationElement.hideToast();
+			} catch (e) {
+				console.error("Error hiding notification toast: ", e);
+			}
+		}
+	}
+
 	function downloadLyrics() {
 		let lyricsContent = getLyricsContent();
 		let format = checkFormat();
@@ -198,142 +294,215 @@
 		notification("Lyrics downloaded!");
 	}
 
+	function submitToLRCLIB() {
+		let syncedLyrics = getLyricsContent("synced");
+		let plainLyrics = getLyricsContent("text");
+		let currentMeta = metaDict[metaDict.length - 1] || {};
+		let artistName = currentMeta.artist;
+		let trackName = currentMeta.track;
+		let albumName = currentMeta.album;
+		let duration = currentMeta.duration;
 
-    function submitToLRCLIB() {
-        let syncedLyrics = getLyricsContent("synced");
-        let plainLyrics = getLyricsContent("text");
-        let currentMeta = metaDict[metaDict.length - 1] || {};
-        let artistName = currentMeta.artist;
-        let trackName = currentMeta.track;
-        let albumName = currentMeta.album;
-        let duration = currentMeta.duration;
-        (async function () {
-            try {
-                notification("Submitting lyrics to LRCLIB...");
-                notification("Requesting challenge...");
-                const challengeResp = await fetch("https://lrclib.net/api/request-challenge", {
-                    method: "POST",
-                });
-                if (!challengeResp.ok) {
-                    alert("Failed to get challenge");
-                    return;
-                }
-                const challengeData = await challengeResp.json();
-                const prefix = challengeData.prefix;
-                const targetHex = challengeData.target;
+		// Helper to publish lyrics (used in both single and multi-thread)
+		async function publishLyrics(publishToken, notif) {
+			const payload = {
+				trackName: trackName,
+				artistName: artistName,
+				albumName: albumName,
+				duration: duration,
+				plainLyrics: plainLyrics,
+				syncedLyrics: syncedLyrics,
+			};
+			let publishResp;
+			try {
+				publishResp = await fetch("https://lrclib.net/api/publish", {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						"X-Publish-Token": publishToken,
+					},
+					body: JSON.stringify(payload),
+				});
+				if (!publishResp.ok) {
+					console.warn("Direct publishing failed, trying with corsproxy...\nStatus:", publishResp.status, "Status Text:", publishResp.statusText);
+					// Try with corsproxy if direct fails
+					publishResp = await fetch("https://corsproxy.io/?url=https://lrclib.net/api/publish", {
+						method: "POST",
+						headers: {
+							"Content-Type": "application/json",
+							"X-Publish-Token": publishToken,
+						},
+						body: JSON.stringify(payload),
+					});
+				}
+			} catch (e) {
+				console.warn("Direct publishing failed, trying with corsproxy...\nError:", e);
+				// Try with corsproxy if fetch throws
+				publishResp = await fetch("https://corsproxy.io/?url=https://lrclib.net/api/publish", {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						"X-Publish-Token": publishToken,
+					},
+					body: JSON.stringify(payload),
+				});
+			}
+			clearNotification(notif);
+			if (publishResp.status === 201) {
+				uploadSuccess();
+			} else {
+				uploadFailed();
+				let errorText = await publishResp.text();
+				console.error("Failed to submit lyrics:", errorText);
+				notification("Failed to submit lyrics: " + errorText, true);
+			}
+		}
 
-                // Helper: hex string to Uint8Array
-                function hexToBytes(hex) {
-                    const bytes = new Uint8Array(hex.length / 2);
-                    for (let i = 0; i < bytes.length; i++) {
-                        bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
-                    }
-                    return bytes;
-                }
+		(async function () {
+			try {
+				notification("Submitting lyrics to LRCLIB...");
+				let notif = displayPersistentToast("Requesting challenge...");
+				const challengeResp = await fetch("https://lrclib.net/api/request-challenge", {
+					method: "POST",
+				});
+				if (!challengeResp.ok) {
+					alert("Failed to get challenge");
+					return;
+				}
+				const challengeData = await challengeResp.json();
+				const prefix = challengeData.prefix;
+				const targetHex = challengeData.target;
 
-                // Helper: verify nonce
-                function verifyNonce(result, target) {
-                    if (result.length !== target.length) return false;
-                    for (let i = 0; i < result.length; i++) {
-                        if (result[i] > target[i]) return false;
-                        else if (result[i] < target[i]) break;
-                    }
-                    return true;
-                }
+				// Helper: hex string to Uint8Array
+				function hexToBytes(hex) {
+					const bytes = new Uint8Array(hex.length / 2);
+					for (let i = 0; i < bytes.length; i++) {
+						bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+					}
+					return bytes;
+				}
 
-                // Helper: sha256 as Uint8Array
-                async function sha256Bytes(str) {
-                    const enc = new TextEncoder();
-                    const buf = enc.encode(str);
-                    const hash = await crypto.subtle.digest("SHA-256", buf);
-                    return new Uint8Array(hash);
-                }
+				// Helper: verify nonce
+				function verifyNonce(result, target) {
+					if (result.length !== target.length) return false;
+					for (let i = 0; i < result.length; i++) {
+						if (result[i] > target[i]) return false;
+						else if (result[i] < target[i]) break;
+					}
+					return true;
+				}
 
-                notification("Solving challenge...");
-                const target = hexToBytes(targetHex);
-                let nonce = 0;
-                let found = false;
-                let result;
+				// Helper: sha256 as Uint8Array
+				async function sha256Bytes(str) {
+					const enc = new TextEncoder();
+					const buf = enc.encode(str);
+					const hash = await crypto.subtle.digest("SHA-256", buf);
+					return new Uint8Array(hash);
+				}
+				clearNotification(notif);
+				notif = displayPersistentToast("Solving challenge...");
+				const target = hexToBytes(targetHex);
 
-                // Print nonce to console every second
-                let lastPrintedNonce = 0;
-                const printInterval = setInterval(() => {
-                    console.log("Current nonce:", lastPrintedNonce);
-                }, 1000);
+				let nonce = 0;
+				let found = false;
+				let result;
 
-                while (!found) {
-                    const input = `${prefix}${nonce}`;
-                    result = await sha256Bytes(input);
-                    lastPrintedNonce = nonce;
-                    if (verifyNonce(result, target)) {
-                        found = true;
-                        break;
-                    }
-                    nonce++;
-                }
-                clearInterval(printInterval);
+				if (enableMultiThreading) {
+					console.log("Using multi-threaded nonce search");
+					const workerCode = [
+						'self.onmessage = async function(e) {',
+						'  var prefix = e.data.prefix;',
+						'  var targetArr = e.data.target;',
+						'  var start = e.data.start;',
+						'  var step = e.data.step;',
+						'  var target = new Uint8Array(targetArr);',
+						'  function verifyNonce(result, target) {',
+						'    if (result.length !== target.length) return false;',
+						'    for (var i = 0; i < result.length; i++) {',
+						'      if (result[i] > target[i]) return false;',
+						'      else if (result[i] < target[i]) break;',
+						'    }',
+						'    return true;',
+						'  }',
+						'  async function sha256Bytes(str) {',
+						'    var enc = new TextEncoder();',
+						'    var buf = enc.encode(str);',
+						'    var hash = await crypto.subtle.digest("SHA-256", buf);',
+						'    return new Uint8Array(hash);',
+						'  }',
+						'  var nonce = start;',
+						'  var lastPrint = Date.now();',
+						'  while (true) {',
+						'    var input = prefix + nonce;',
+						'    var result = await sha256Bytes(input);',
+						'    if (verifyNonce(result, target)) {',
+						'      self.postMessage({ found: true, nonce: nonce });',
+						'      break;',
+						'    }',
+						'    if (Date.now() - lastPrint > 1000) {',
+						'      self.postMessage({ found: false, nonce: nonce });',
+						'      lastPrint = Date.now();',
+						'    }',
+						'    nonce += step;',
+						'  }',
+						'};'
+					].join('\n');
+					const blob = new Blob([workerCode], { type: 'application/javascript' });
+					const workerUrl = URL.createObjectURL(blob);
+					const numWorkers = Math.max(2, navigator.hardwareConcurrency ? Math.floor(navigator.hardwareConcurrency / 2) : 2);
+					let resolved = false;
+					let workers = [];
+					let publishNonce = null;
+					for (let i = 0; i < numWorkers; i++) {
+						const w = new Worker(workerUrl);
+						w.onmessage = function(e) {
+							if (e.data.found && !resolved) {
+								resolved = true;
+								publishNonce = e.data.nonce;
+								// Terminate all workers
+								workers.forEach(wrk => wrk.terminate());
+								clearNotification(notif);
+								notif = displayPersistentToast("Submitting lyrics...");
+								const publishToken = `${prefix}:${publishNonce}`;
+								publishLyrics(publishToken, notif);
+							} else if (!e.data.found) {
+								console.log('Worker', i, 'current nonce:', e.data.nonce);
+							}
+						};
+						w.postMessage({ prefix, target: Array.from(target), start: i, step: numWorkers });
+						workers.push(w);
+					}
+					return; // Don't run the single-threaded code below
+				}
 
-                const publishToken = `${prefix}:${nonce}`;
+				// Single-threaded fallback
+				let lastPrintedNonce = 0;
+				const printInterval = setInterval(() => {
+					console.log("Current nonce:", lastPrintedNonce);
+				}, 1000);
 
-                notification("Submitting lyrics...");
-                const payload = {
-                    trackName: trackName,
-                    artistName: artistName,
-                    albumName: albumName,
-                    duration: duration,
-                    plainLyrics: plainLyrics,
-                    syncedLyrics: syncedLyrics,
-                };
-                let publishResp;
-                try {
-                    publishResp = await fetch("https://lrclib.net/api/publish", {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/json",
-                            "X-Publish-Token": publishToken,
-                        },
-                        body: JSON.stringify(payload),
-                    });
-                    if (!publishResp.ok) {
-                        // Try with corsproxy if direct fails
-                        publishResp = await fetch("https://corsproxy.io/?url=https://lrclib.net/api/publish", {
-                            method: "POST",
-                            headers: {
-                                "Content-Type": "application/json",
-                                "X-Publish-Token": publishToken,
-                            },
-                            body: JSON.stringify(payload),
-                        });
-                    }
-                } catch (e) {
-                    // Try with corsproxy if fetch throws
-                    publishResp = await fetch("https://corsproxy.io/?url=https://lrclib.net/api/publish", {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/json",
-                            "X-Publish-Token": publishToken,
-                        },
-                        body: JSON.stringify(payload),
-                    });
-                }
-                if (publishResp.status === 201) {
-                    Toastify({
-                        text: "Lyrics submitted to LRCLIB!",
-                        duration: 3000,
-                        style: { background: good },
-                    }).showToast();
-                } else {
-                    Toastify({
-                        text: "Failed to submit lyrics.",
-                        duration: 3000,
-                        style: { background: bad },
-                    }).showToast();
-                }
-            } catch (error) {
-                notification("Error submitting lyrics: " + error.message, true);
-            }
-        })();
-    }
+				while (!found) {
+					const input = `${prefix}${nonce}`;
+					result = await sha256Bytes(input);
+					lastPrintedNonce = nonce;
+					if (verifyNonce(result, target)) {
+						found = true;
+						break;
+					}
+					nonce++;
+				}
+				clearInterval(printInterval);
+
+				const publishToken = `${prefix}:${nonce}`;
+				clearNotification(notif);
+				notif = displayPersistentToast("Submitting lyrics...");
+				await publishLyrics(publishToken, notif);
+
+			} catch (error) {
+				notification("Error submitting lyrics: " + error.message, true);
+			}
+		})();
+	}
 
 	function showPopup() {
 		let popup = document.createElement("div");
@@ -408,11 +577,11 @@
 		formatSelect.style.background = "var(--mxm-backgroundSecondary)";
 		formatSelect.style.color = "var(--mxm-contentPrimary)";
 		formatSelect.innerHTML = `
-            <option value="json">JSON</option>
-            <option value="text">Text</option>
-            <option value="synced">Text (Synced)</option>
-            <option value="html">HTML</option>
-        `;
+			<option value="json">JSON</option>
+			<option value="text">Text</option>
+			<option value="synced">Text (Synced)</option>
+			<option value="html">HTML</option>
+		`;
 		bottomButtonContainer.appendChild(formatLabel);
 		bottomButtonContainer.appendChild(formatSelect);
 		let copyButton = document.createElement("button");
@@ -438,6 +607,7 @@
 		downloadButton.onclick = downloadLyrics;
 		bottomButtonContainer.appendChild(downloadButton);
 		let submitButton = document.createElement("button");
+		submitButton.id = "lrclib-submit-button";
 		submitButton.innerText = "Submit to LRCLIB";
 		submitButton.style.backgroundColor = "var(--mxm-backgroundSecondary)";
 		submitButton.style.color = "var(--mxm-contentPrimary)";
@@ -454,8 +624,13 @@
 	const trackTargetString = "https://www.musixmatch.com/ws/1.1/track.subtitle.get?";
 	const spotifyDataString = "https://api.spotify.com/v1/tracks/";
 
-	const originalFetch = window.fetch;
-	window.fetch = function (...args) {
+	let windowProxy = window;
+
+	if (unsafeWindow) {
+		windowProxy = unsafeWindow;
+	}
+	const originalFetch = windowProxy.fetch;
+	windowProxy.fetch = function (...args) {
 		const [url] = args;
 
 		return originalFetch.apply(this, args).then(async (response) => {
