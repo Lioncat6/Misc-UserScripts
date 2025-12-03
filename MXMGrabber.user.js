@@ -2,7 +2,7 @@
 // @name         MusixMatch Lyrics Grabber
 // @namespace    MXMGrabber
 // @match        https://www.musixmatch.com/*
-// @version      8-3-2025
+// @version      12-3-2025
 // @author       Lioncat6
 // @description  Tool to grab Synced lyrics from MusixMatch lyrics pages to either download or upload them to LRCLIB
 // @resource     toastifyJs https://cdn.jsdelivr.net/npm/toastify-js
@@ -175,6 +175,7 @@
 		lyricsContainer.style.flexDirection = "column";
 		lyricsContainer.style.maxHeight = "100px";
 		lyricsContainer.style.overflowY = "auto";
+		lyricsContainer.style.transition = "max-height 0.25s ease";
 		lyricsContainer.className = "mxm-lyrics-container";
 		if (lyrics) {
 			lyrics.forEach((element) => {
@@ -298,10 +299,16 @@
 		let syncedLyrics = getLyricsContent("synced");
 		let plainLyrics = getLyricsContent("text");
 		let currentMeta = metaDict[metaDict.length - 1] || {};
-		let artistName = currentMeta.artist;
-		let trackName = currentMeta.track;
-		let albumName = currentMeta.album;
-		let duration = currentMeta.duration;
+		const getInput = (id, fallback) => {
+			const el = document.getElementById(id);
+			return el ? el.value : (typeof fallback !== 'undefined' ? fallback : "");
+		};
+		let artistName = getInput("mxm-meta-artist", currentMeta.artist);
+		let trackName = getInput("mxm-meta-track", currentMeta.track);
+		let albumName = getInput("mxm-meta-album", currentMeta.album);
+		let durationVal = getInput("mxm-meta-duration", currentMeta.duration);
+		let duration = parseFloat(durationVal) || currentMeta.duration || 0;
+		let isrc = getInput("mxm-meta-isrc", currentMeta.isrc);
 
 		// Helper to publish lyrics (used in both single and multi-thread)
 		async function publishLyrics(publishToken, notif) {
@@ -556,6 +563,73 @@
 		expandButton.onclick = expandShrinkLyrics;
 		lyricsWrapper.appendChild(createLyricsElements(lyricsDict[lyricsDict.length - 1]));
 		lyricsWrapper.appendChild(expandButton);
+
+		let currentMeta = metaDict[metaDict.length - 1] || {};
+		let metaContainer = document.createElement("div");
+		metaContainer.style.display = "flex";
+		metaContainer.style.flexDirection = "column";
+		metaContainer.style.gap = "8px";
+		metaContainer.style.margin = "10px 0";
+		metaContainer.style.width = "100%";
+
+		const makeField = (id, labelText, value, attrs = {}) => {
+			let wrapper = document.createElement("div");
+			wrapper.style.display = "flex";
+			wrapper.style.flexDirection = "row";
+			wrapper.style.alignItems = "center";
+			wrapper.style.gap = "8px";
+			let label = document.createElement("label");
+			label.innerText = labelText + ":";
+			label.style.minWidth = "60px";
+			label.style.color = "var(--mxm-contentPrimary)";
+			label.htmlFor = id;
+			let input = document.createElement("input");
+			input.id = id;
+			input.value = typeof value !== "undefined" ? value : "";
+			input.style.flex = "1";
+			input.style.padding = "6px";
+			input.style.borderRadius = "6px";
+			input.style.border = "1px solid var(--mxm-borderPrimary)";
+			input.style.background = "var(--mxm-backgroundSecondary)";
+			input.style.color = "var(--mxm-contentPrimary)";
+			Object.keys(attrs).forEach(k => input.setAttribute(k, attrs[k]));
+			wrapper.appendChild(label);
+			wrapper.appendChild(input);
+			return { wrapper, input };
+		};
+
+		const trackField = makeField("mxm-meta-track", "Track", currentMeta.track || "");
+		const artistField = makeField("mxm-meta-artist", "Artist", currentMeta.artist || "");
+		const albumField = makeField("mxm-meta-album", "Album", currentMeta.album || "");
+		const durationField = makeField("mxm-meta-duration", "Duration(s)", currentMeta.duration || "", { type: "number", step: "0.01", min: "0" });
+		const isrcField = makeField("mxm-meta-isrc", "ISRC", currentMeta.isrc || "");
+
+		metaContainer.appendChild(trackField.wrapper);
+		metaContainer.appendChild(artistField.wrapper);
+		metaContainer.appendChild(albumField.wrapper);
+		metaContainer.appendChild(durationField.wrapper);
+		metaContainer.appendChild(isrcField.wrapper);
+
+		const syncMeta = () => {
+			let idx = metaDict.length - 1;
+			if (idx < 0) {
+				metaDict.push({});
+				idx = metaDict.length - 1;
+			}
+			metaDict[idx] = metaDict[idx] || {};
+			metaDict[idx].track = document.getElementById("mxm-meta-track").value;
+			metaDict[idx].artist = document.getElementById("mxm-meta-artist").value;
+			metaDict[idx].album = document.getElementById("mxm-meta-album").value;
+			const durVal = document.getElementById("mxm-meta-duration").value;
+			metaDict[idx].duration = durVal === "" ? currentMeta.duration : parseFloat(durVal);
+			metaDict[idx].isrc = document.getElementById("mxm-meta-isrc").value;
+		};
+
+		["mxm-meta-track", "mxm-meta-artist", "mxm-meta-album", "mxm-meta-duration", "mxm-meta-isrc"].forEach(id => {
+			const el = document.getElementById(id);
+			if (el) el.addEventListener("input", syncMeta);
+		});
+
 		popup.appendChild(lyricsWrapper);
 		let bottomButtonContainer = document.createElement("div");
 		bottomButtonContainer.style.display = "flex";
@@ -617,7 +691,45 @@
 		submitButton.style.padding = "10px 20px";
 		submitButton.onclick = submitToLRCLIB;
 		bottomButtonContainer.appendChild(submitButton);
+
+		// Toggle button to show/hide metadata (collapsed by default)
+		const metaToggle = document.createElement("button");
+		metaToggle.id = "mxm-meta-toggle";
+		metaToggle.innerText = "Metadata ▼";
+		metaToggle.style.backgroundColor = "var(--mxm-backgroundSecondary)";
+		metaToggle.style.color = "var(--mxm-contentPrimary)";
+		metaToggle.style.border = "none";
+		metaToggle.style.borderRadius = "5px";
+		metaToggle.style.cursor = "pointer";
+		metaToggle.style.padding = "8px 12px";
+		metaToggle.style.marginLeft = "10px";
+
+		// Append the toggle next to the submit button
+		bottomButtonContainer.appendChild(metaToggle);
+
 		popup.appendChild(bottomButtonContainer);
+
+		// Wrap metaContainer so we can collapse/expand it via max-height
+		const metaWrapper = document.createElement("div");
+		metaWrapper.style.overflow = "hidden";
+		metaWrapper.style.maxHeight = "0px"; // collapsed by default
+		metaWrapper.style.transition = "max-height 0.25s ease";
+		metaWrapper.appendChild(metaContainer);
+
+		// Toggle behavior
+		let metaExpanded = false;
+		metaToggle.addEventListener("click", () => {
+			metaExpanded = !metaExpanded;
+			if (metaExpanded) {
+				metaWrapper.style.maxHeight = "300px"; // expanded height
+				metaToggle.innerText = "Metadata ▲";
+			} else {
+				metaWrapper.style.maxHeight = "0px";
+				metaToggle.innerText = "Metadata ▼";
+			}
+		});
+
+		popup.appendChild(metaWrapper);
 		document.body.appendChild(popup);
 	}
 
