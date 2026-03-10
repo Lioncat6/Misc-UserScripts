@@ -15,3 +15,6 @@ Collection of my Miscellaneous userscripts
   
 #### Musixmatch Lyrics Info
 [Import](https://github.com/Lioncat6/Misc-UserScripts/raw/refs/heads/main/MusixMatch-Info.user.js)
+
+#### Qobuz Button Fix 
+[Import](https://raw.githubusercontent.com/Lioncat6/Misc-UserScripts/main/Qobuz-Button-Fix.user.js)

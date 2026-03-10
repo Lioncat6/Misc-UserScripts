@@ -10,7 +10,7 @@
 // @homepageURL  https://github.com/Lioncat6/Misc-UserScripts
 // @supportURL   https://github.com/Lioncat6/Misc-UserScripts/issues
 // @updateURL    https://raw.githubusercontent.com/Lioncat6/Misc-UserScripts/main/Qobuz-Button-Fix.user.js
-// @downloadURL  https://raw.githubusercontent.com/Lioncat6/Misc-UserScripts/main/Qobuz-Button-Fix.user.j
+// @downloadURL  https://raw.githubusercontent.com/Lioncat6/Misc-UserScripts/main/Qobuz-Button-Fix.user.js
 // @license MIT
 // ==/UserScript==
 
